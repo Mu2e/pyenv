@@ -1,0 +1,41 @@
+name: ana_v2.6.1
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - pip
+  - matplotlib
+  - pandas
+  - scipy
+  - scikit-learn
+  - numpy
+  - pyarrow
+  - pytorch::pytorch
+  - pytorch::torchvision
+  - pytorch::torchaudio
+  - pytorch::pytorch-cuda=12.4
+  - tensorflow-gpu
+  - py-xgboost-gpu
+  - cuda-compat
+  - dask
+  - jupyterlab
+  - statsmodels
+  - ipykernel
+  - conda-pack
+  - fsspec-xrootd
+  - htop
+  - tmux
+  - plotly
+  - tqdm
+  - pip:
+    - uproot
+    - awkward
+    - vector
+    - hist[plot]
+    - zfit
+    - hepstats
+    - dash
+    - tf2onnx
+    - onnx
+    - "git+https://github.com/Mu2e/pyutils.git"
