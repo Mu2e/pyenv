@@ -2,8 +2,8 @@
 
 #
 # Distribute a Python environment 
-# Samuel Grant 2025
-#
+# Samuel Grant 2025 (Modified for Pixi/Mu2e JupyterHub 2026)
+# Modified further by Sophie Middleton 2026
 #
 # USAGE: 
 # . distribute.sh -e myenv
@@ -13,6 +13,11 @@
 # . distribute.sh # if the current active environment is the one to distribute
 
 umask 0022
+
+# System-level explicit configuration for Pixi engine
+export CONDA_PKGS_DIRS="/home/sophie/conda"
+alias conda="/opt/pixi/.pixi/envs/default/bin/conda"
+alias mamba="/opt/pixi/.pixi/envs/default/bin/conda"
 
 # Parse command line arguments
 AUTO_YES=false
@@ -25,13 +30,13 @@ Usage: source $0 [-y|--yes] [-e|--env ENV_NAME] [-p|--path] [-h|--help]
 
   -y, --yes        Automatically answer 'Y' to all prompts
   -e, --env        Specify environment name to distribute
-  -p, --path        Specifiy the path to write the environment
+  -p, --path       Specifiy the path to write the environment
   -h, --help       Show this help message
 
 This script will:
-1. Export the specified conda environment to YAML
-2. Pack the environment using conda-pack
-3. Extract it to a shared directory
+1. Export the specified environment to YAML (using Pixi's conda engine)
+2. Directly archive the user's environment to bypass system permissions
+3. Extract it to the target shared directory and manually fix binary prefixes
 
 Examples:
   source $0 -e myenv       # Distribute 'myenv' environment
@@ -88,7 +93,7 @@ prompt_continue() {
             [Yy]|[Yy][Ee][Ss]|"")  # Accept Y, y, yes, Yes, or empty (default to yes)
                 return 0
                 ;;
-            [Nn]|[Nn][Oo])
+            [Nn]|[Nn][Oct])
                 echo "❌ Exiting..."
                 return 1
                 ;;
@@ -99,75 +104,38 @@ prompt_continue() {
     done
 }
 
-# Function to check if command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-# Check if mamba/conda is available
-if ! command_exists mamba && ! command_exists conda; then
-    echo "❌ Error: Neither mamba nor conda is installed or not in PATH" >&2
-    return 1
-fi
-
 # 1. Setup and validation
 echo "⭐️ Environment distribution setup"
 
-# Use provided environment name or detect current one
+# Target environment validation mapping
 if [[ -n "$PROVIDED_ENV_NAME" ]]; then
     ENV_NAME="$PROVIDED_ENV_NAME"
     echo "✅ Using specified environment: ${ENV_NAME}"
-    
-    # Check if environment exists
-    if ! conda env list | grep -q "^${ENV_NAME} "; then
-        echo "❌ Environment '${ENV_NAME}' doesn't exist" >&2
-        echo "Available environments:" >&2
-        conda env list | grep -v "^#" | grep -v "^$" >&2
-        return 1
-    fi
 else
-    # No environment specified via command line, check current environment
     ENV_NAME=${CONDA_DEFAULT_ENV:-}
-    if [[ -z "$ENV_NAME" ]]; then
-        echo "⚠️  No conda environment is currently active and none specified"
+    if [[ -z "$ENV_NAME" || "$ENV_NAME" == "base" ]]; then
+        echo "⚠️  No environment specified via flags. Checking default home directories..."
+        echo "Available environments in user space:"
+        ls -1 /home/sophie/.conda/envs/ 2>/dev/null
         
-        # Show available environments
-        echo "Available environments:"
-        conda env list | grep -v "^#" | grep -v "^$" | while read -r line; do
-            env_name=$(echo "$line" | awk '{print $1}')
-            if [[ "$env_name" != "base" ]]; then
-                echo "  - $env_name"
-            fi
-        done
-        
-        # Prompt for environment name
         while true; do
             read -r -p "👋 Enter environment name to distribute: " ENV_NAME
-            if [[ -n "$ENV_NAME" && "$ENV_NAME" != "base" ]]; then
-                # Check if environment exists
-                if conda env list | grep -q "^${ENV_NAME} "; then
-                    echo "✅ Will distribute environment: ${ENV_NAME}"
-                    break
-                else
-                    echo "❌ Environment '${ENV_NAME}' doesn't exist"
-                fi
+            if [[ -n "$ENV_NAME" && -d "/home/sophie/.conda/envs/${ENV_NAME}" ]]; then
+                echo "✅ Will distribute environment: ${ENV_NAME}"
+                break
             else
-                echo "❌ Please enter a valid environment name (not 'base')"
+                echo "❌ Environment folder does not exist in /home/sophie/.conda/envs/"
             fi
         done
-    elif [[ "$ENV_NAME" == "base" ]]; then
-        echo "❌ Currently in 'base' environment. Please specify an environment with -e/--env or activate a different environment first" >&2
-        echo "Available environments:" >&2
-        conda env list | grep -v "^#" | grep -v "^$" | grep -v "^base " >&2
-        return 1
     else
-        echo "✅ Using currently active environment: ${ENV_NAME}" 
+        echo "✅ Using currently active environment context: ${ENV_NAME}" 
     fi
 fi
 
-# Final validation
-if [[ "$ENV_NAME" == "base" ]]; then
-    echo "❌ Cannot distribute 'base' environment" >&2
+# Define explicit user paths to cross-reference
+ABS_ENV_SOURCE="/home/sophie/.conda/envs/${ENV_NAME}"
+if [[ ! -d "$ABS_ENV_SOURCE" ]]; then
+    echo "❌ Error: Could not locate source directory at $ABS_ENV_SOURCE" >&2
     return 1
 fi
 
@@ -178,7 +146,7 @@ ENV_DIR="${PYENV_PATH}/env"
 YAML_DIR="${PYENV_PATH}/yml/full"
 TAR_DIR="${PYENV_PATH}/tar"
 
-# Create directories if they don't exist
+# Create target deployment directories if they don't exist
 for dir in "$ENV_DIR" "$YAML_DIR" "$TAR_DIR"; do
     if [[ ! -d "$dir" ]]; then
         echo "📁 Creating directory: $dir"
@@ -190,32 +158,9 @@ if ! prompt_continue "👋 Distribute '${ENV_NAME}'?"; then
     return 1
 fi
 
-# Initialize conda/mamba for this shell session
-echo "🔧 Initialising conda..."
-eval "$(conda shell.bash hook)" 2>/dev/null || eval "$(mamba shell.bash hook)" 2>/dev/null || {
-    echo "❌ Failed to initialize conda/mamba" >&2
-    return 1
-}
-
-# Activate the environment (this persists in the current shell since we're sourced)
-echo "🔧 Activating environment: ${ENV_NAME}"
-if ! conda activate "${ENV_NAME}"; then
-    echo "❌ Failed to activate environment: ${ENV_NAME}" >&2
-    return 1
-fi
-
-# Check if conda-pack is available in the activated environment
-if ! command_exists conda-pack; then
-    echo "❌ Error: conda-pack isn't installed in environment '${ENV_NAME}'" >&2
-    echo "Please install it first with: conda install conda-pack" >&2
-    return 1
-fi
-echo "✅ conda-pack is available"
-
-# 2. Create YAML and timestamp
+# 2. Create YAML
 echo "⭐️ Exporting environment"
 THIS_YAML="${YAML_DIR}/${ENV_NAME}.yml"
-# THIS_ALT_YAML="${YAML_ALT_DIR}/${ENV_NAME}.yml"
 
 if [[ -f "${THIS_YAML}" ]]; then 
     if ! prompt_continue "👋 ${THIS_YAML} already exists. Overwrite?"; then
@@ -225,16 +170,9 @@ if [[ -f "${THIS_YAML}" ]]; then
     rm -f "${THIS_YAML}"
 fi
 
-# if [[ -f "${THIS_ALT_YAML}" ]]; then 
-#     if ! prompt_continue "👋 Alternative ${THIS_ALT_YAML} already exists. Overwrite?"; then
-#         return 1
-#     fi
-#     echo "🗑️  Removing existing ${THIS_ALT_YAML}..."
-#     rm -f "${THIS_ALT_YAML}"
-# fi
-
-echo "📄 Exporting to YAML: ${THIS_YAML}" #  and ${THIS_ALT_YAML}"
-if ! mamba env export > "${THIS_YAML}"; then
+echo "📄 Exporting to YAML: ${THIS_YAML}"
+# Execute export via the explicit Pixi wrapper mapping
+if ! /opt/pixi/.pixi/envs/default/bin/conda env export --prefix "$ABS_ENV_SOURCE" > "${THIS_YAML}"; then
     echo "❌ Failed to export environment to YAML" >&2
     return 1
 fi
@@ -254,23 +192,17 @@ if ! mv "${THIS_YAML}.tmp" "${THIS_YAML}"; then
     return 1
 fi
 
-# Copy to ../yml/full
-FULL_YAML_DIR="../yml/full"
-cp "${THIS_YAML}" "${FULL_YAML_DIR}/$(basename ${THIS_YAML})"
-echo "✅ Copied YAML to ${FULL_YAML_DIR}/$(basename ${THIS_YAML})"
+echo "✅ Written YAML: ${THIS_YAML}"
 
-echo "✅ Written YAML:"
-echo "${THIS_YAML}"
-# echo "${THIS_ALT_YAML}"
-
-# 3. Pack environment
+# 3. Direct Archiving and Relocation Pipeline
 echo "⭐️ Packing environment"
-if ! prompt_continue "👋 Pack '${ENV_NAME}' into '${ENV_DIR}/${ENV_NAME}'?"; then
+PACKED_DIR="${ENV_DIR}/${ENV_NAME}"
+
+if ! prompt_continue "👋 Copy and relocate '${ENV_NAME}' into '${PACKED_DIR}'?"; then
     return 1
 fi
 
 # Remove existing packed directory
-PACKED_DIR="${ENV_DIR}/${ENV_NAME}"
 if [[ -d "$PACKED_DIR" ]]; then 
     if ! prompt_continue "👋 ${PACKED_DIR} already exists. Remove and recreate?"; then
         return 1
@@ -289,44 +221,39 @@ if [[ -f "${TAR_FILE}" ]]; then
     rm -f "${TAR_FILE}"
 fi
 
-echo "📦 Packing '${ENV_NAME}' into '${TAR_FILE}'..."
-if ! conda pack -o "${TAR_FILE}"; then
-    echo "❌ Failed to pack environment" >&2
+echo "📦 Archiving directly from user space: ${ABS_ENV_SOURCE}..."
+if ! tar -czf "${TAR_FILE}" -C "${ABS_ENV_SOURCE}" .; then
+    echo "❌ Failed to package environment files" >&2
     return 1
 fi
 
-# Set permissions
+# Set proper filesystem permissions
 chmod 644 "${TAR_FILE}"
 echo "✅ Created tar file: ${TAR_FILE}"
 
-echo "📂 Extracting '${TAR_FILE}' into '${PACKED_DIR}'..."
+echo "📂 Extracting '${TAR_FILE}' into target storage folder '${PACKED_DIR}'..."
 if ! mkdir -p "${PACKED_DIR}"; then
-    echo "❌ Failed to create directory: ${PACKED_DIR}" >&2
+    echo "❌ Failed to create target destination directory: ${PACKED_DIR}" >&2
     return 1
 fi
 
 if ! tar -xzf "${TAR_FILE}" -C "${PACKED_DIR}"; then
-    echo "❌ Failed to extract environment" >&2
+    echo "❌ Failed to unpack data into destination folder" >&2
     return 1
 fi
 
-# Fix hardcoded prefixes from conda-pack
-echo "🔧 Running conda-unpack to fix paths..."
-source "${PACKED_DIR}/bin/activate"
-if ! conda-unpack; then
-    echo "⚠️  conda-unpack failed (environment may still work)" >&2
-fi
-source deactivate 2>/dev/null || true
+# 4. Manual Text/Binary Prefix Patching (Bypassing conda-unpack)
+echo "🔧 Fixing hardcoded prefixes manually..."
+# Replaces references to the home directory path with the new destination path inside binary/text wrappers
+find "${PACKED_DIR}/bin" -type f -exec grep -Iq . {} \; -and -exec sed -i "s|${ABS_ENV_SOURCE}|${PACKED_DIR}|g" {} +
 
 echo ""
 echo "✅ Completed successfully!"
-echo "📁 Environment directory: ${PACKED_DIR}"
-echo "📄 YAML file: ${THIS_YAML}"
-echo "📦 Tar file: ${TAR_FILE}"
-# echo "🕐 Timestamp: ${TIMESTAMP}"
+echo "📁 Target shared environment directory: ${PACKED_DIR}"
+echo "📄 Portable YAML configuration file: ${THIS_YAML}"
+echo "📦 Distributable Tar package archive: ${TAR_FILE}"
 echo ""
-echo "To use this environment on another system:"
-echo "  1. Copy the YAML file and run: mamba env create -f ${ENV_NAME}.yml"
-echo "  2. Or extract the tar file and activate directly"
+echo "To map systems or nodes over to this distributed environment:"
+echo "  1. Update your shell context prefix: export CONDA_PREFIX=\"${PACKED_DIR}\""
+echo "  2. Source your experiment setup function: setup_mu2e_python_env"
 echo ""
-echo "✅ Environment '${ENV_NAME}' remains active in this shell"

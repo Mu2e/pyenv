@@ -115,6 +115,21 @@ setup_mu2e_python_env
 
 ---
 
+## `.condarc`
+
+To ensure that the .conda is not stored on the EAF, but in fact in the data area:
+
+```
+/exp/mu2e/data/users/<user>
+```
+
+create a directory there called `conda` and softlink this to the EAF working repo then add this to the `.condarc`:
+
+```
+pkgs_dirs:
+- /home/sophie/conda
+```
+
 ## test-scripts
 
 #### `test_imports.py`
