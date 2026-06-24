@@ -40,7 +40,7 @@ print(f"🐍 Python: {sys.version}\n")
 print("📦 Core packages")
 packages = [
     "matplotlib", "pandas", "scipy", "sklearn", "statsmodels",
-    "numpy", "plotly", "tqdm", "pyarrow", "dask",
+    "numpy", "plotly", "tqdm", "pyarrow", "dask", "onnx", "tf2onnx"
 ]
 failures = sum(not test_import(p) for p in packages)
 print()
