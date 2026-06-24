@@ -6,6 +6,71 @@ All notable changes to the Mu2e Python environments will be documented in this f
 
 ### 2.6.1 (current)
 
+* Added onnx support: `onnx` and `tf2onnx`
+* Changes in build/distribute process due to EAF pixi change
+
+**Packages  **
+
+```
+🐍 Python: 3.12.13 | packaged by conda-forge | (main, Mar  5 2026, 16:50:00) [GCC 14.3.0]
+
+📦 Core packages
+  ✅ matplotlib (3.11.0)
+  ✅ pandas (3.0.3)
+  ✅ scipy (1.17.1)
+  ✅ sklearn (1.9.0)
+  ✅ statsmodels (0.14.6)
+  ✅ numpy (1.26.4)
+  ✅ plotly (6.8.0)
+  ✅ tqdm (4.68.3)
+  ✅ pyarrow (18.0.0)
+  ✅ dask (2026.6.0)
+  ✅ onnx (1.19.0)
+  ✅ tf2onnx (1.17.0)
+
+⚛️  HEP packages
+  ✅ uproot (5.7.4)
+  ✅ awkward (2.9.1)
+  ✅ vector (1.8.1)
+  ✅ hist (2.10.1)
+  ✅ zfit (0.28.0)
+  ✅ hepstats (0.10.0)
+
+🧠 ML packages
+  ✅ torch (2.5.1)
+  ✅ tensorflow (2.21.0)
+  ✅ xgboost (2.1.4)
+
+🔧 Tools
+  ✅ jupyterlab (4.6.0)
+  ✅ ipykernel (7.3.0)
+  ✅ dash (4.3.0)
+  ✅ conda_pack (0.0.0)
+
+🔬 Mu2e pyutils
+  ✅ pyutils (0.0.0)
+  ✅ from pyutils.pyread import Reader
+  ✅ from pyutils.pyimport import Importer
+  ✅ from pyutils.pyprocess import Processor
+  ✅ from pyutils.pyselect import Select
+  ✅ from pyutils.pyvector import Vector
+  ✅ from pyutils.pyprint import Print
+  ✅ from pyutils.pyplot import Plot
+  ✅ from pyutils.pydisplay import Display
+  ✅ from pyutils.pycut import CutManager
+
+🔗 Submodules
+  ✅ from tensorflow import keras
+
+🖥️  CUDA
+  ❌ PyTorch CUDA not available (only on GPU)
+  ❌ TensorFlow CUDA not available (only on GPU)
+  ❌ XGBoost CUDA not available (only on GPU)
+
+
+```
+### 2.6.1
+
 Patch from `2.6.0`:
 
 * Fixed TensorFlow XRootD SSL conflict via `sitecustomize.py` (pre-init XRootD SSL context before TF can interfere)
