@@ -46,7 +46,7 @@ fi
 ENVNAME=${1}
 VERSION=${2:-current}
 if [ "$VERSION" == "current" ]; then  # use current version link
-    VERSION="$(readlink ${MU2E}/env/${ENVNAME}/current)"
+    VERSION="$( basename $(readlink -f ${MU2E}/env/${ENVNAME}/current))"
 fi
 
 # Define paths
@@ -70,6 +70,8 @@ export CONDA_PREFIX="$CONDA_PREFIX"
 # ---------------------------------------------------------------------
 if [ -f "$ACTIVATE_PATH" ]; then
     echo "Activating Mu2e Python environment: $ENVNAME $VERSION (Legacy Conda build)"
+    # unset this so we don't trigger guards in the activate
+    unset CONDA_PREFIX
     source "$ACTIVATE_PATH"
 else
     echo "Activating Mu2e Python environment: $ENVNAME $VERSION (Pixi-Pack build)"
